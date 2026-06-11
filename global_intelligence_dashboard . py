@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 import plotly.express as px
-import plotly.graph_objects as go
 import requests
 import json
 import os
@@ -29,40 +28,31 @@ def save_data(data):
 
 data = load_data()
 
-# Sidebar
 st.sidebar.header("Controls")
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
 
-# Risk Score Explanation
-with st.sidebar.expander("📊 Risk Score Explanation (1-10)"):
-    st.markdown("""
-    **1-3**: Low impact / mostly stable  
-    **4-6**: Moderate risk / watch closely  
-    **7-10**: High risk / major implications  
-    *Customize based on your own analysis.*
-    """)
+with st.sidebar.expander("📊 Risk Score Explanation"):
+    st.markdown("**1-3**: Low  \n**4-6**: Moderate  \n**7-10**: High")
 
 @st.cache_data(ttl=3600)
 def get_market_data(ticker):
     try:
-        data = yf.download(ticker, period="1mo")
-        return data
+        return yf.download(ticker, period="1mo")
     except:
         return pd.DataFrame()
 
-# Persistent events (general)
 if data.get("events") is not None:
     events_df = pd.read_json(data["events"])
 else:
     events_df = pd.DataFrame({
-        "Event": ["US Political Developments", "Russia-Ukraine Conflict", "Middle East Tensions", "US-China Relations", "Global Economic Risks", "FIFA World Cup 2026"],
-        "Date": ["2025-Ongoing", "2022-Ongoing", "2023-Ongoing", "2024-Ongoing", "2024-2026", "June-July 2026"],
-        "Implications": ["Policy shifts, market volatility", "Energy, food security, NATO", "Oil prices, regional stability", "Supply chains, tech competition", "Debt, inflation, commodities", "Economic boost, tourism"],
-        "Risk Score": [8, 7, 8, 6, 7, 3],
-        "Stock Impact": ["Broad markets", "Oil & Defense", "Oil ↑", "Tech & Semis", "Volatility", "Hospitality"],
-        "Lat": [38.9, 48.0, 31.0, 35.0, 0, -23],   # Approximate locations
-        "Lon": [-77.0, 37.0, 35.0, 105.0, 0, -43]
+        "Event": ["US Political Developments", "Russia-Ukraine Conflict", "Middle East Tensions", "US-China Relations", "Global Economic Risks"],
+        "Date": ["2025-Ongoing", "2022-Ongoing", "2023-Ongoing", "2024-Ongoing", "2024-2026"],
+        "Implications": ["Policy shifts, volatility", "Energy, food security", "Oil prices, stability", "Tech competition", "Debt, inflation"],
+        "Risk Score": [8, 7, 8, 6, 7],
+        "Stock Impact": ["Broad markets", "Oil & Defense", "Oil", "Tech", "Volatility"],
+        "Lat": [38.9, 48.0, 31.0, 35.0, 0],
+        "Lon": [-77.0, 37.0, 35.0, 105.0, 0]
     })
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 Events & Map", "📊 Markets", "📜 History", "⚖️ Analysis", "📰 News", "📝 Notes"])
@@ -71,84 +61,58 @@ with tab1:
     st.header("Major World Events")
     st.dataframe(events_df.drop(columns=["Lat", "Lon"], errors='ignore'), use_container_width=True)
     
-    # World Map
     st.subheader("🌍 Event Locations")
-    fig = px.scatter_geo(events_df, lat='Lat', lon='Lon', hover_name="Event",
-                         hover_data=["Risk Score", "Implications"],
-                         title="Global Event Hotspots")
+    fig = px.scatter_geo(events_df, lat='Lat', lon='Lon', hover_name="Event", hover_data=["Risk Score"])
     st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("➕ Add Custom Event"):
         new_event = st.text_input("Event Name")
-        new_date = st.text_input("Date/Status")
+        new_date = st.text_input("Date")
         new_imp = st.text_area("Implications")
-        new_risk = st.slider("Risk Score (1-10)", 1, 10, 5)
+        new_risk = st.slider("Risk Score", 1, 10, 5)
         if st.button("Add Event"):
-            new_row = pd.DataFrame({"Event": [new_event], "Date": [new_date], "Implications": [new_imp], "Risk Score": [new_risk], "Stock Impact": [""], "Lat": [0], "Lon": [0]})
+            new_row = pd.DataFrame([{"Event": new_event, "Date": new_date, "Implications": new_imp, "Risk Score": new_risk, "Stock Impact": "", "Lat": 0, "Lon": 0}])
             events_df = pd.concat([events_df, new_row], ignore_index=True)
             data["events"] = events_df.to_json(orient="records")
             save_data(data)
-            st.success("Event saved persistently!")
+            st.success("Saved!")
 
 with tab2:
-    st.header("Economic & Market Impacts")
-    col1, col2 = st.columns(2)
-    with col1:
-        ticker = st.text_input("Ticker", "^GSPC")
-        data_m = get_market_data(ticker)
-        if not data_m.empty:
-            fig = px.line(data_m, y="Close", title=f"{ticker} Trend")
-            st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        st.write("**Quick Metrics**")
-        for comm in ["CL=F", "GC=F", "^GSPC"]:
-            d = get_market_data(comm)
-            if not d.empty:
-                st.metric(comm, f"${d['Close'].iloc[-1]:.2f}")
+    st.header("Markets")
+    ticker = st.text_input("Ticker", "^GSPC")
+    data_m = get_market_data(ticker)
+    if not data_m.empty:
+        st.plotly_chart(px.line(data_m, y="Close", title=f"{ticker} Trend"), use_container_width=True)
 
 with tab3:
     st.header("Historical Context")
-    st.markdown("Use reliable primary sources for deeper background on any event.")
+    st.write("Use primary sources for background.")
 
 with tab4:
-    st.header("Unbiased Pros/Cons")
+    st.header("Analysis")
     if not events_df.empty:
         event = st.selectbox("Select Event", events_df["Event"])
-        st.markdown(f"**{event}**")
-        st.markdown("""
-        **Proponents' View:** Strategic benefits, stability.  
-        **Critics' View:** Costs, risks, unintended consequences.  
-        Record your own analysis in Notes.
-        """)
+        st.write(f"**{event}** - Weigh pros/cons in Notes tab.")
 
 with tab5:
-    st.header("📰 Latest News")
-    st.info("Get a free API key from [newsapi.org](https://newsapi.org)")
-    api_key = st.text_input("News API Key (optional)", type="password")
-    query = st.text_input("Search Term", "geopolitics OR ukraine OR middle east")
-    if st.button("Fetch News"):
-        if api_key:
-            try:
-                url = f"https://newsapi.org/v2/everything?q={query}&sortBy=publishedAt&apiKey={api_key}&pageSize=8"
-                resp = requests.get(url).json()
-                for article in resp.get("articles", []):
-                    st.markdown(f"**{article['title']}**  \n{article.get('description','')}  \n[Read]({article['url']})")
-            except:
-                st.error("Error fetching news.")
-        else:
-            st.warning("Enter API key above.")
+    st.header("📰 News")
+    api_key = st.text_input("NewsAPI Key (free from newsapi.org)", type="password")
+    if st.button("Fetch News") and api_key:
+        try:
+            resp = requests.get(f"https://newsapi.org/v2/everything?q=geopolitics&apiKey={api_key}&pageSize=5").json()
+            for a in resp.get("articles", []):
+                st.markdown(f"**{a['title']}**  \n{a.get('description','')}  \n[Read]({a['url']})")
+        except:
+            st.error("News fetch failed.")
 
 with tab6:
-    st.header("📝 My Research Notes (Persistent)")
-    notes = st.text_area("Deep analysis, sources, conclusions...", value=data.get("notes", ""), height=500)
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("💾 Save Notes"):
-            data["notes"] = notes
-            save_data(data)
-            st.success("Notes saved!")
-    with col2:
-        if st.button("📤 Export Notes"):
-            st.download_button("Download .txt", notes, file_name="alethia_notes.txt")
+    st.header("📝 My Notes")
+    notes = st.text_area("Your research...", value=data.get("notes", ""), height=400)
+    if st.button("Save Notes"):
+        data["notes"] = notes
+        save_data(data)
+        st.success("Saved!")
+    if st.button("Export Notes"):
+        st.download_button("Download", notes, "notes.txt")
 
-st.sidebar.success("🌍 Alethia — Your Personal Global Intelligence Tool")
+st.sidebar.success("Alethia Ready")
