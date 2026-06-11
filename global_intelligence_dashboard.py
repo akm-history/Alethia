@@ -38,11 +38,12 @@ with st.sidebar.expander("📊 Risk Score Explanation"):
 @st.cache_data(ttl=3600)
 def get_market_data(ticker):
     try:
-        return yf.download(ticker, period="1mo")
+        df = yf.download(ticker, period="1mo", progress=False)
+        return df
     except:
         return pd.DataFrame()
 
-# Default events with map coordinates
+# Default events
 if data.get("events") is not None:
     events_df = pd.read_json(data["events"])
 else:
@@ -62,14 +63,9 @@ with tab1:
     st.header("Major World Events")
     st.dataframe(events_df.drop(columns=["Lat", "Lon"], errors='ignore'), use_container_width=True)
     
-    st.subheader("🌍 Interactive World Map - Event Hotspots")
-    fig = px.scatter_geo(events_df, 
-                        lat='Lat', 
-                        lon='Lon', 
-                        hover_name="Event",
-                        hover_data=["Risk Score", "Implications", "Stock Impact"],
-                        title="Global Event Hotspots (Hover for details)",
-                        size="Risk Score")
+    st.subheader("🌍 Interactive World Map")
+    fig = px.scatter_geo(events_df, lat='Lat', lon='Lon', hover_name="Event",
+                         hover_data=["Risk Score", "Implications"], size="Risk Score")
     st.plotly_chart(fig, use_container_width=True)
 
     with st.expander("➕ Add Custom Event"):
@@ -78,21 +74,21 @@ with tab1:
         new_imp = st.text_area("Implications")
         new_risk = st.slider("Risk Score (1-10)", 1, 10, 5)
         if st.button("Add Event"):
-            new_row = pd.DataFrame([{
-                "Event": new_event, "Date": new_date, "Implications": new_imp, 
-                "Risk Score": new_risk, "Stock Impact": "", "Lat": 0, "Lon": 0
-            }])
+            new_row = pd.DataFrame([{"Event": new_event, "Date": new_date, "Implications": new_imp, 
+                                     "Risk Score": new_risk, "Stock Impact": "", "Lat": 0, "Lon": 0}])
             events_df = pd.concat([events_df, new_row], ignore_index=True)
             data["events"] = events_df.to_json(orient="records")
             save_data(data)
-            st.success("Event saved persistently!")
+            st.success("Event saved!")
 
 with tab2:
     st.header("Economic & Market Impacts")
     ticker = st.text_input("Ticker (e.g. ^GSPC, CL=F, GC=F)", "^GSPC")
     data_m = get_market_data(ticker)
-    if not data_m.empty:
+    if not data_m.empty and "Close" in data_m.columns:
         st.plotly_chart(px.line(data_m, y="Close", title=f"{ticker} Trend"), use_container_width=True)
+    else:
+        st.warning("No market data available for this ticker right now. Try another (e.g. CL=F for oil).")
 
 with tab3:
     st.header("Historical Context")
@@ -103,29 +99,29 @@ with tab4:
     if not events_df.empty:
         event = st.selectbox("Select Event", events_df["Event"])
         st.markdown(f"**{event}**")
-        st.markdown("**Proponents:** Benefits / stability  \n**Critics:** Costs / risks  \nRecord your thoughts in Notes.")
+        st.markdown("**Proponents:** Benefits / stability  \n**Critics:** Costs / risks")
 
 with tab5:
     st.header("📰 Latest News")
-    st.info("Free API key from https://newsapi.org")
+    st.info("Get free key at https://newsapi.org")
     api_key = st.text_input("News API Key (optional)", type="password")
     query = st.text_input("Search", "geopolitics")
     if st.button("Fetch News") and api_key:
         try:
             resp = requests.get(f"https://newsapi.org/v2/everything?q={query}&sortBy=publishedAt&apiKey={api_key}&pageSize=6").json()
             for article in resp.get("articles", []):
-                st.markdown(f"**{article['title']}**\n{article.get('description','')}\n[Read full]({article['url']})")
+                st.markdown(f"**{article['title']}**\n{article.get('description','')}\n[Read]({article['url']})")
         except:
-            st.error("Failed to fetch news.")
+            st.error("Could not fetch news.")
 
 with tab6:
-    st.header("📝 My Research Notes (Persistent)")
-    notes = st.text_area("Deep dives, sources, conclusions...", value=data.get("notes", ""), height=400)
+    st.header("📝 My Research Notes")
+    notes = st.text_area("Your thoughts, sources, analysis...", value=data.get("notes", ""), height=400)
     if st.button("💾 Save Notes"):
         data["notes"] = notes
         save_data(data)
         st.success("Notes saved!")
     if st.button("📤 Export Notes"):
-        st.download_button("Download .txt", notes, "alethia_notes.txt")
+        st.download_button("Download", notes, "alethia_notes.txt")
 
-st.sidebar.success("🌍 Alethia Ready")
+st.sidebar.success("🌍 Alethia")
